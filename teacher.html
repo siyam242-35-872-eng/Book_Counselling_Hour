@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Smart Counseling Hour — Teacher Dashboard</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">SCH</div>
+    <div class="brand-text">
+      <span class="brand-title">Smart Counseling Hour</span>
+      <span class="brand-subtitle">Faculty Desk</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="user-chip">
+      <span class="name" id="teacherNameChip">—</span>
+      <span class="role">Teacher</span>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="logoutBtn">Log out</button>
+  </div>
+</header>
+
+<main class="page-shell">
+
+  <div class="page-header">
+    <div class="eyebrow">Faculty queue</div>
+    <h1 id="welcomeHeading">Hello there</h1>
+    <p class="lede">Review incoming student queries, record your answers, and schedule one-on-one counseling wherever a written answer isn't enough.</p>
+  </div>
+
+  <section class="section">
+    <div class="section-title">
+      <h2>All student queries</h2>
+      <span class="count" id="queryCount">0 total</span>
+    </div>
+    <div id="queriesList"></div>
+  </section>
+
+</main>
+
+<script src="db.js"></script>
+<script>
+  (function () {
+    "use strict";
+    var api = window.api;
+    var esc = api.escapeHtml;
+
+    var user = api.getCurrentUser();
+    if (!user || user.role !== "teacher") {
+      window.location.href = "index.html";
+      return;
+    }
+
+    document.getElementById("teacherNameChip").textContent = user.name;
+    document.getElementById("welcomeHeading").textContent = "Hello, " + user.name;
+
+    document.getElementById("logoutBtn").addEventListener("click", function () {
+      api.logout();
+      window.location.href = "index.html";
+    });
+
+    function stampClassFor(status) {
+      if (status === api.STATUS.ANSWERED) return "stamp-answered";
+      if (status === api.STATUS.COUNSELING) return "stamp-counseling";
+      return "stamp-pending";
+    }
+
+    function formatDateTime(iso) {
+      if (!iso) return "";
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return "";
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) +
+        " at " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    }
+
+    function renderQueries() {
+      var queries = api.getAllQueries();
+      var list = document.getElementById("queriesList");
+      document.getElementById("queryCount").textContent =
+        queries.length + (queries.length === 1 ? " total" : " total");
+
+      if (queries.length === 0) {
+        list.innerHTML =
+          '<div class="empty-state">' +
+            '<div class="empty-mark">—</div>' +
+            '<p>No student queries have been filed yet.</p>' +
+          '</div>';
+        return;
+      }
+
+      var html = queries.map(function (q) {
+        var existingAnswer = q.answer ? esc(q.answer) : "";
+        var checked = q.counselingRequired ? "checked" : "";
+        var scheduleBtn = q.counselingRequired
+          ? '<button type="button" class="btn btn-outline btn-sm schedule-btn" data-query-id="' + esc(q.id) + '" data-student-id="' + esc(q.studentId) + '">Schedule counseling</button>'
+          : "";
+
+        return (
+          '<div class="card">' +
+            '<div class="card-head">' +
+              '<div>' +
+                '<p class="card-subject">' + esc(q.subject) + '</p>' +
+                '<p class="card-meta">From ' + esc(q.studentName) + ' &middot; filed ' + esc(formatDateTime(q.createdAt)) + '</p>' +
+              '</div>' +
+              '<span class="stamp ' + stampClassFor(q.status) + '">' + esc(q.status) + '</span>' +
+            '</div>' +
+            '<div class="card-question">' +
+              '<span class="label">Student\u2019s question</span>' +
+              esc(q.question) +
+            '</div>' +
+
+            '<form class="teacher-answer-form" data-query-id="' + esc(q.id) + '">' +
+              '<div class="field">' +
+                '<label for="answer-' + esc(q.id) + '">Your answer</label>' +
+                '<textarea id="answer-' + esc(q.id) + '" name="answer" placeholder="Write a response for the student…">' + existingAnswer + '</textarea>' +
+              '</div>' +
+              '<div class="checkbox-row">' +
+                '<input type="checkbox" id="counseling-' + esc(q.id) + '" name="counseling" ' + checked + ' />' +
+                '<label for="counseling-' + esc(q.id) + '">This student needs one-on-one counseling</label>' +
+              '</div>' +
+              '<div class="card-footer">' +
+                '<div class="card-actions">' +
+                  '<button type="submit" class="btn btn-brass btn-sm">Save answer</button>' +
+                  scheduleBtn +
+                '</div>' +
+              '</div>' +
+            '</form>' +
+          '</div>'
+        );
+      }).join("");
+
+      list.innerHTML = html;
+      attachHandlers();
+    }
+
+    function attachHandlers() {
+      var forms = document.querySelectorAll(".teacher-answer-form");
+      forms.forEach(function (form) {
+        form.addEventListener("submit", function (e) {
+          e.preventDefault();
+          var queryId = form.getAttribute("data-query-id");
+          var answerField = form.querySelector('textarea[name="answer"]');
+          var checkboxField = form.querySelector('input[name="counseling"]');
+          var answer = answerField.value.trim();
+          var counselingRequired = checkboxField.checked;
+
+          if (!answer) {
+            answerField.focus();
+            return;
+          }
+
+          api.answerQuery(queryId, answer, counselingRequired);
+          renderQueries();
+        });
+      });
+
+      var scheduleButtons = document.querySelectorAll(".schedule-btn");
+      scheduleButtons.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var queryId = btn.getAttribute("data-query-id");
+          var studentId = btn.getAttribute("data-student-id");
+          api.setSelectedQuery({
+            queryId: queryId,
+            studentId: studentId,
+            teacherId: user.id
+          });
+          window.location.href = "appointment.html";
+        });
+      });
+    }
+
+    renderQueries();
+  })();
+</script>
+</body>
+</html>
