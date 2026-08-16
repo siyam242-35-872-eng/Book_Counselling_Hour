@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Smart Counseling Hour — Schedule Counseling</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">SCH</div>
+    <div class="brand-text">
+      <span class="brand-title">Smart Counseling Hour</span>
+      <span class="brand-subtitle">Faculty Desk</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="user-chip">
+      <span class="name" id="teacherNameChip">—</span>
+      <span class="role">Teacher</span>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="logoutBtn">Log out</button>
+  </div>
+</header>
+
+<main class="page-shell" style="max-width:680px;">
+
+  <div class="page-header">
+    <div class="eyebrow">Schedule counseling</div>
+    <h1>Set up a one-on-one session</h1>
+    <p class="lede">Confirm a date, time, and location for the student. They'll see it on their dashboard right away.</p>
+  </div>
+
+  <div id="successBanner" class="success-banner">
+    <span class="mark">✓</span>
+    <div class="text">
+      <strong>Appointment scheduled</strong>
+      <span>The student can now see this session on their dashboard.</span>
+    </div>
+  </div>
+
+  <div id="noQueryState" class="empty-state" style="display:none;">
+    <div class="empty-mark">—</div>
+    <p>No query was selected for scheduling. Please start from the faculty dashboard.</p>
+    <div style="margin-top:16px;">
+      <a href="teacher.html" class="btn btn-outline btn-sm">Back to dashboard</a>
+    </div>
+  </div>
+
+  <div id="schedulingArea">
+    <div class="query-context" id="queryContext"></div>
+
+    <div class="panel">
+      <div id="formError" class="form-error" role="alert"></div>
+
+      <form id="appointmentForm" novalidate>
+        <div class="form-grid">
+          <div class="field">
+            <label for="date">Date</label>
+            <input type="date" id="date" name="date" required />
+          </div>
+          <div class="field">
+            <label for="time">Time</label>
+            <input type="time" id="time" name="time" required />
+          </div>
+          <div class="field field-full">
+            <label for="location">Location</label>
+            <input type="text" id="location" name="location" placeholder="e.g. Room 214 or a video call link" maxlength="200" required />
+          </div>
+          <div class="field field-full">
+            <label for="note">Note for the student <span style="text-transform:none;font-weight:400;">(optional)</span></label>
+            <textarea id="note" name="note" placeholder="Anything the student should prepare or bring…" maxlength="1000"></textarea>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-brass" id="confirmBtn">Confirm appointment</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="postConfirmActions" style="display:none;margin-top:20px;">
+    <a href="teacher.html" class="btn btn-primary">Return to dashboard</a>
+  </div>
+
+</main>
+
+<script src="db.js"></script>
+<script>
+  (function () {
+    "use strict";
+    var api = window.api;
+    var esc = api.escapeHtml;
+
+    var user = api.getCurrentUser();
+    if (!user || user.role !== "teacher") {
+      window.location.href = "index.html";
+      return;
+    }
+
+    document.getElementById("teacherNameChip").textContent = user.name;
+    document.getElementById("logoutBtn").addEventListener("click", function () {
+      api.logout();
+      window.location.href = "index.html";
+    });
+
+    var selected = api.getSelectedQuery();
+
+    if (!selected || !selected.studentId) {
+      document.getElementById("schedulingArea").style.display = "none";
+      document.getElementById("noQueryState").style.display = "block";
+      return;
+    }
+
+    var student = api.getUserById(selected.studentId);
+    var query = selected.queryId ? api.getQueryById(selected.queryId) : null;
+
+    var contextHtml = '<span class="label">Scheduling for</span>' +
+      '<h3 style="margin:6px 0 4px;">' + esc(student ? student.name : "Unknown student") + '</h3>';
+
+    if (query) {
+      contextHtml +=
+        '<p class="card-meta" style="margin-bottom:8px;">Regarding: ' + esc(query.subject) + '</p>' +
+        '<p style="font-size:14px;color:var(--color-ink);margin:0;">' + esc(query.question) + '</p>';
+    } else {
+      contextHtml += '<p class="card-meta" style="margin:0;">No linked query — this is a standalone appointment.</p>';
+    }
+
+    document.getElementById("queryContext").innerHTML = contextHtml;
+
+    function showFormError(message) {
+      var box = document.getElementById("formError");
+      box.textContent = message;
+      box.classList.add("visible");
+    }
+
+    function hideFormError() {
+      var box = document.getElementById("formError");
+      box.textContent = "";
+      box.classList.remove("visible");
+    }
+
+    document.getElementById("appointmentForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      hideFormError();
+
+      var date = document.getElementById("date").value;
+      var time = document.getElementById("time").value;
+      var location = document.getElementById("location").value.trim();
+      var note = document.getElementById("note").value.trim();
+
+      if (!date || !time || !location) {
+        showFormError("Please fill in date, time, and location.");
+        return;
+      }
+
+      try {
+        api.createAppointment(
+          selected.studentId,
+          selected.teacherId || user.id,
+          selected.queryId || null,
+          date,
+          time,
+          location,
+          note
+        );
+      } catch (err) {
+        showFormError(err.message || "Something went wrong scheduling this appointment.");
+        return;
+      }
+
+      api.clearSelectedQuery();
+
+      document.getElementById("schedulingArea").style.display = "none";
+      document.getElementById("successBanner").classList.add("visible");
+      document.getElementById("postConfirmActions").style.display = "block";
+
+      window.alert("Appointment confirmed for " + date + " at " + time + ".");
+    });
+  })();
+</script>
+</body>
+</html>
