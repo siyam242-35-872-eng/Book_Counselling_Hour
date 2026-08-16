@@ -1,12 +1,116 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>UniCounsel — University Counselling Platform</title>
-  </head>
-  <body class="bg-slate-50">
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Smart Counseling Hour — Sign In</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="login-shell">
+  <aside class="login-aside">
+    <div class="brand">
+      <div class="brand-mark">SCH</div>
+      <div class="brand-text">
+        <span class="brand-title" style="color:#F3F5F8;">Smart Counseling Hour</span>
+        <span class="brand-subtitle">Academic Office</span>
+      </div>
+    </div>
+
+    <div class="login-aside-content">
+      <h1>Every question finds its way to the right desk.</h1>
+      <p>Students file academic queries, teachers answer them, and one-on-one counseling gets scheduled the moment it's needed — all logged in one place.</p>
+    </div>
+
+    <div class="login-aside-footer">
+      Registrar-grade record keeping, kept entirely in your browser.
+    </div>
+  </aside>
+
+  <main class="login-main">
+    <div class="login-card">
+      <h2>Sign in</h2>
+      <p class="subhead">Enter your credentials to reach your dashboard.</p>
+
+      <div id="loginError" class="form-error" role="alert"></div>
+
+      <form id="loginForm" novalidate>
+        <div class="field">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" autocomplete="username" placeholder="you@example.com" required />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" placeholder="••••••" required />
+        </div>
+        <button type="submit" class="btn btn-primary">Sign in</button>
+      </form>
+
+      <div class="demo-box">
+        <strong>Demo credentials</strong>
+        <div class="demo-row"><span>Student</span><span><code>student@gmail.com</code> / <code>1234</code></span></div>
+        <div class="demo-row"><span>Teacher</span><span><code>teacher@gmail.com</code> / <code>1234</code></span></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="db.js"></script>
+<script>
+  (function () {
+    "use strict";
+
+    // If someone is already signed in, send them straight to their dashboard.
+    var existing = window.api.getCurrentUser();
+    if (existing) {
+      window.location.href = existing.role === "teacher" ? "teacher.html" : "student.html";
+      return;
+    }
+
+    var form = document.getElementById("loginForm");
+    var errorBox = document.getElementById("loginError");
+
+    function showError(message) {
+      errorBox.textContent = message;
+      errorBox.classList.add("visible");
+    }
+
+    function hideError() {
+      errorBox.textContent = "";
+      errorBox.classList.remove("visible");
+    }
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      hideError();
+
+      var email = document.getElementById("email").value.trim();
+      var password = document.getElementById("password").value;
+
+      if (!email || !password) {
+        showError("Please enter both an email and a password.");
+        return;
+      }
+
+      var user = window.api.login(email, password);
+
+      if (!user) {
+        showError("Those credentials don't match any account. Please try again.");
+        return;
+      }
+
+      window.api.setCurrentUser(user);
+
+      if (user.role === "teacher") {
+        window.location.href = "teacher.html";
+      } else if (user.role === "student") {
+        window.location.href = "student.html";
+      } else {
+        showError("This account has no recognized role. Contact the registrar.");
+      }
+    });
+  })();
+</script>
+</body>
 </html>
