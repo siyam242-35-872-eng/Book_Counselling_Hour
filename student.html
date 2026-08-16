@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Smart Counseling Hour — Student Dashboard</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">SCH</div>
+    <div class="brand-text">
+      <span class="brand-title">Smart Counseling Hour</span>
+      <span class="brand-subtitle">Student Desk</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="user-chip">
+      <span class="name" id="studentNameChip">—</span>
+      <span class="role">Student</span>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="logoutBtn">Log out</button>
+  </div>
+</header>
+
+<main class="page-shell">
+
+  <div class="page-header">
+    <div class="eyebrow">Welcome back</div>
+    <h1 id="welcomeHeading">Hello there</h1>
+    <p class="lede">File a new academic query, track what your teachers have answered, and keep an eye on any counseling appointments that get scheduled for you.</p>
+  </div>
+
+  <section class="section">
+    <div class="panel">
+      <h2 style="font-size:19px;margin-bottom:4px;">Submit a new query</h2>
+      <p class="lede" style="margin-bottom:18px;">Ask about coursework, deadlines, grades, or anything else academic.</p>
+
+      <div id="queryError" class="form-error" role="alert"></div>
+
+      <form id="queryForm" novalidate>
+        <div class="form-grid">
+          <div class="field field-full">
+            <label for="subject">Subject</label>
+            <input type="text" id="subject" name="subject" placeholder="e.g. Calculus II — Midterm Prep" maxlength="120" required />
+          </div>
+          <div class="field field-full">
+            <label for="question">Your question</label>
+            <textarea id="question" name="question" placeholder="Describe what you'd like help with…" maxlength="2000" required></textarea>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-brass">Submit query</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-title">
+      <h2>My queries</h2>
+      <span class="count" id="queryCount">0 total</span>
+    </div>
+    <div id="queriesList"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-title">
+      <h2>My counseling appointments</h2>
+      <span class="count" id="apptCount">0 total</span>
+    </div>
+    <div id="appointmentsList"></div>
+  </section>
+
+</main>
+
+<script src="db.js"></script>
+<script>
+  (function () {
+    "use strict";
+    var api = window.api;
+    var esc = api.escapeHtml;
+
+    var user = api.getCurrentUser();
+    if (!user || user.role !== "student") {
+      window.location.href = "index.html";
+      return;
+    }
+
+    document.getElementById("studentNameChip").textContent = user.name;
+    document.getElementById("welcomeHeading").textContent = "Hello, " + user.name;
+
+    document.getElementById("logoutBtn").addEventListener("click", function () {
+      api.logout();
+      window.location.href = "index.html";
+    });
+
+    function stampClassFor(status) {
+      if (status === api.STATUS.ANSWERED) return "stamp-answered";
+      if (status === api.STATUS.COUNSELING) return "stamp-counseling";
+      return "stamp-pending";
+    }
+
+    function formatDateTime(iso) {
+      if (!iso) return "";
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return "";
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) +
+        " at " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    }
+
+    function renderQueries() {
+      var queries = api.getStudentQueries(user.id);
+      var list = document.getElementById("queriesList");
+      document.getElementById("queryCount").textContent =
+        queries.length + (queries.length === 1 ? " total" : " total");
+
+      if (queries.length === 0) {
+        list.innerHTML =
+          '<div class="empty-state">' +
+            '<div class="empty-mark">—</div>' +
+            '<p>No queries filed yet. Submit one above and it will appear here.</p>' +
+          '</div>';
+        return;
+      }
+
+      var html = queries.map(function (q) {
+        var answerBlock = "";
+        if (q.answer) {
+          answerBlock =
+            '<div class="card-answer">' +
+              '<span class="label">Teacher\u2019s answer</span>' +
+              esc(q.answer) +
+            '</div>';
+        }
+        return (
+          '<div class="card">' +
+            '<div class="card-head">' +
+              '<div>' +
+                '<p class="card-subject">' + esc(q.subject) + '</p>' +
+                '<p class="card-meta">Filed ' + esc(formatDateTime(q.createdAt)) + '</p>' +
+              '</div>' +
+              '<span class="stamp ' + stampClassFor(q.status) + '">' + esc(q.status) + '</span>' +
+            '</div>' +
+            '<div class="card-question">' +
+              '<span class="label">Your question</span>' +
+              esc(q.question) +
+            '</div>' +
+            answerBlock +
+          '</div>'
+        );
+      }).join("");
+
+      list.innerHTML = html;
+    }
+
+    function apptStampClass(status) {
+      if (status === api.APPT_STATUS.SCHEDULED) return "stamp-scheduled";
+      return "stamp-pending";
+    }
+
+    function renderAppointments() {
+      var appts = api.getStudentAppointments(user.id);
+      var list = document.getElementById("appointmentsList");
+      document.getElementById("apptCount").textContent =
+        appts.length + (appts.length === 1 ? " total" : " total");
+
+      if (appts.length === 0) {
+        list.innerHTML =
+          '<div class="empty-state">' +
+            '<div class="empty-mark">—</div>' +
+            '<p>No counseling appointments scheduled right now.</p>' +
+          '</div>';
+        return;
+      }
+
+      var html = appts.map(function (a) {
+        var noteBlock = a.note
+          ? '<div class="card-question"><span class="label">Note from ' + esc(a.teacherName) + '</span>' + esc(a.note) + '</div>'
+          : "";
+        return (
+          '<div class="card">' +
+            '<div class="card-head">' +
+              '<div>' +
+                '<p class="card-subject">' + esc(a.date) + ' at ' + esc(a.time) + '</p>' +
+                '<p class="card-meta">With ' + esc(a.teacherName) + ' &middot; ' + esc(a.location) + '</p>' +
+              '</div>' +
+              '<span class="stamp ' + apptStampClass(a.status) + '">' + esc(a.status) + '</span>' +
+            '</div>' +
+            noteBlock +
+          '</div>'
+        );
+      }).join("");
+
+      list.innerHTML = html;
+    }
+
+    function showQueryError(message) {
+      var box = document.getElementById("queryError");
+      box.textContent = message;
+      box.classList.add("visible");
+    }
+
+    function hideQueryError() {
+      var box = document.getElementById("queryError");
+      box.textContent = "";
+      box.classList.remove("visible");
+    }
+
+    document.getElementById("queryForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      hideQueryError();
+
+      var subject = document.getElementById("subject").value.trim();
+      var question = document.getElementById("question").value.trim();
+
+      if (!subject || !question) {
+        showQueryError("Please fill in both the subject and your question.");
+        return;
+      }
+
+      try {
+        api.addQuery(user.id, subject, question);
+      } catch (err) {
+        showQueryError(err.message || "Something went wrong submitting your query.");
+        return;
+      }
+
+      document.getElementById("queryForm").reset();
+      renderQueries();
+    });
+
+    renderQueries();
+    renderAppointments();
+  })();
+</script>
+</body>
+</html>
