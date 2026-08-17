@@ -65,14 +65,14 @@
       const demoUsers = [
         {
           id: "user_student_demo",
-          name: "Alex Rivera",
+          name: "Siyam",
           email: "student@gmail.com",
           password: "1234",
           role: "student"
         },
         {
           id: "user_teacher_demo",
-          name: "Dr. Morgan Lee",
+          name: "Partho Chanda",
           email: "teacher@gmail.com",
           password: "1234",
           role: "teacher"
